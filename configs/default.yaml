@@ -1,0 +1,33 @@
+# experiment params
+NUM_SEEDS: 1
+SEED: 0
+
+# if  hyperparameters tuning
+HYP_TUNE: False
+
+DEBUG_ALL: False  # this will calculate and log all values including those do not contribute to the learning process
+
+PRINT: True  # print and log notification
+
+DASHBOARD: True # print in a cool dashboard
+
+PLOT: False # Plot important metrics and save in pdf and png file (only activate if CSV_LOG=True)
+
+# csv log
+CSV_LOG: True
+
+# tensorboard log
+TENSORBOARD_LOG: False
+
+SAVE_STATE: True  # save models, states
+SAVE_INTERVAL: 0.05
+
+# wandb params
+WANDB_MODE: "disabled"  # set to online to activate wandb, set to disabled to deactivate wandb
+ENTITY: "test_algos"
+PROJECT: "ps_template_pqn"
+alg:
+  WANDB_LOG_ALL_SEEDS: False # will log all the vmapped seeds separetely
+
+# where to save the params (if None, will not save)
+SAVE_PATH: "./output/"

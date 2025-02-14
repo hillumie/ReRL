@@ -1,0 +1,27 @@
+# Common
+numpy
+pandas
+matplotlib
+scipy
+
+# Beauty
+rich
+tqdm
+
+# Run managements
+wandb
+hydra-core
+omegaconf
+rich-argparse
+
+# Jax lib
+jax[cuda12]
+optax
+flax
+chex
+flashbax
+
+# Environments
+gymnax
+brax
+envpool
