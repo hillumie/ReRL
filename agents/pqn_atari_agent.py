@@ -424,7 +424,7 @@ def make_train(config):
 
         if config.get("SAVE_STATE", True):
 
-            ckpt = {"runner_state": train_state, "metrics": metrics}
+            ckpt = {"runner_state": train_state, "metrics": global_metrics}
             jax.debug.callback(save_state, ckpt, 0)
 
 
