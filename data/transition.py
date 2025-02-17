@@ -1,6 +1,7 @@
 import jax
-import jax.numpy as np
+import jax.numpy as jnp
 import chex
+from typing import Sequence, NamedTuple, Any
 
 @chex.dataclass(frozen=True)
 class Transition:
@@ -22,3 +23,13 @@ class RNNTransition:
     last_done: chex.Array
     last_action: chex.Array
     q_vals: chex.Array
+
+
+class ContinuousTransition(NamedTuple):
+    done: jnp.ndarray
+    action: jnp.ndarray
+    value: jnp.ndarray
+    reward: jnp.ndarray
+    log_prob: jnp.ndarray
+    obs: jnp.ndarray
+    info: jnp.ndarray

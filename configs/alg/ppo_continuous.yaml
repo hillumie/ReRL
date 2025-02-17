@@ -1,0 +1,33 @@
+ALG_NAME: "ppo_continuous"
+LR: 3e-4
+NUM_ENVS: 2048
+NUM_STEPS: 10
+TOTAL_TIMESTEPS: 5e7
+UPDATE_EPOCHS: 4
+NUM_MINIBATCHES: 32
+GAMMA: 0.99
+GAE_LAMBDA: 0.95
+CLIP_EPS: 0.2
+ENT_COEF: 0.0
+VF_COEF: 0.5
+MAX_GRAD_NORM: 0.5
+ACTIVATION: "tanh"
+ANNEAL_LR: False
+NORMALIZE_ENV: True
+
+# env specific
+# ENV_NAME: "CartPole-v1" # Acrobot-v1
+ENV_NAME: "hopper"
+ENV_KWARGS:
+  frame_skip: 1
+
+# evaluation
+TEST_DURING_TRAINING: True 
+TEST_INTERVAL: 0.05 # in terms of total updates
+TEST_NUM_ENVS: 128
+EPS_TEST: 0. # 0 for greedy policy
+
+# evaluation
+EVAL_INTERVAL: 0.05 # in terms of total updates
+EVAL_NUM_ENVS: 128
+EPS_EVAL: 0. # 0 for greedy policy

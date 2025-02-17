@@ -50,6 +50,9 @@ class Agent():
         elif self.config["ALG_NAME"] == "pqn_minatar":
             from agents.pqn_minatar_agent import make_train
             self.agent = jax.jit(make_train(self.config))
+        elif self.config["ALG_NAME"] == "ppo_continuous":
+            from agents.impure_ppo_continuous_agent import PPOContinuousAgent
+            self.agent = PPOContinuousAgent(self.config, rng)
         else:
             raise NotImplemented(f"{self.config['ALG_NAME']} is not yet implemented")
         

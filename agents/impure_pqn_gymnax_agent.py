@@ -30,6 +30,7 @@ class CustomTrainState(TrainState):
     grad_steps: int = 0
 
 
+# Impure agent to use impure env but does not lose much speed on training
 class PQNGymnaxAgent():
 
     def __init__(self, config, rng):
@@ -421,6 +422,9 @@ class PQNGymnaxAgent():
             ckpt = {"runner_state": self.train_state, "metrics": global_metrics}
             jax.debug.callback(save_state, ckpt, 0)
 
+        # Avoid using Python impure for loop to increase speed (Cartpole SPS: 70k -> 63k)
+        # for _ in range(int(self.config["NUM_UPDATES"])):
+        #     runner_state, metrics = self._update_step(runner_state, None)
 
         runner_state, metrics = jax.lax.scan(
             self._update_step, runner_state, None, self.config["NUM_UPDATES"]

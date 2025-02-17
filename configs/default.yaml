@@ -30,4 +30,4 @@ alg:
   WANDB_LOG_ALL_SEEDS: False # will log all the vmapped seeds separetely
 
 # where to save the params (if None, will not save)
-SAVE_PATH: "./output/"
+SAVE_PATH: "./outputs/"
