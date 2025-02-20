@@ -134,7 +134,7 @@ class PPOContinuousAgent():
                 rng_step, env_state, action, self.env_params
             )
             transition = ContinuousTransition(
-                done, action, value, reward, log_prob, last_obs, info
+                done, action, value, reward, log_prob, last_obs
             )
             # runner_state = (train_state, env_state, obsv, rng)
             # return runner_state, transition

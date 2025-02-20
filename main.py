@@ -22,6 +22,13 @@ import warnings
 warnings.filterwarnings('ignore')
 import time
 from agent import Agent
+
+# logging.basicConfig()
+# logging.getLogger().setLevel(logging.ERROR)
+
+logger = logging.getLogger("jax._src")
+logger.setLevel(logging.ERROR)
+
 # from utils.common_utils import set_seed
 
 

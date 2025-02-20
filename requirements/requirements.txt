@@ -20,8 +20,9 @@ optax
 flax
 chex
 flashbax
+distrax
 
 # Environments
 gymnax
 brax
-envpool
+gymnasium

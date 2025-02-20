@@ -1,0 +1,32 @@
+ALG_NAME: "ppo_isaac"
+LR: 1e-3
+NUM_ENVS: 4096
+NUM_STEPS: 24
+TOTAL_TIMESTEPS: 1e8
+UPDATE_EPOCHS: 8
+NUM_MINIBATCHES: 4
+GAMMA: 0.99
+GAE_LAMBDA: 0.95
+CLIP_EPS: 0.2
+ENT_COEF: 0.001
+VF_COEF: 1.0
+MAX_GRAD_NORM: 1.0
+ACTIVATION: "elu"
+ANNEAL_LR: False
+
+# env specific
+# ENV_NAME: "CartPole-v1" # Acrobot-v1
+ENV_NAME: "Isaac-Reach-Franka-v0"
+ENV_KWARGS:
+  frame_skip: 1
+
+# evaluation
+TEST_DURING_TRAINING: True 
+TEST_INTERVAL: 0.05 # in terms of total updates
+TEST_NUM_ENVS: 8
+EPS_TEST: 0. # 0 for greedy policy
+
+# evaluation
+EVAL_INTERVAL: 0.05 # in terms of total updates
+EVAL_NUM_ENVS: 4096
+EPS_EVAL: 0. # 0 for greedy policy

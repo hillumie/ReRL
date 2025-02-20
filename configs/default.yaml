@@ -19,7 +19,7 @@ CSV_LOG: True
 # tensorboard log
 TENSORBOARD_LOG: False
 
-SAVE_STATE: True  # save models, states
+SAVE_STATE: False  # save models, states
 SAVE_INTERVAL: 0.05
 
 # wandb params

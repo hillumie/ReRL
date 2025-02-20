@@ -53,6 +53,9 @@ class Agent():
         elif self.config["ALG_NAME"] == "ppo_continuous":
             from agents.impure_ppo_continuous_agent import PPOContinuousAgent
             self.agent = PPOContinuousAgent(self.config, rng)
+        elif self.config["ALG_NAME"] == "ppo_isaac":
+            from agents.impure_ppo_isaaclab_agent import PPOIsaacAgent
+            self.agent = PPOIsaacAgent(self.config, rng)
         else:
             raise NotImplemented(f"{self.config['ALG_NAME']} is not yet implemented")
         
