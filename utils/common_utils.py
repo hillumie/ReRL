@@ -281,11 +281,20 @@ def fmt_perf(name, time, uptime):
 def print_dashboard(metrics, losses, global_step, epoch,
         stats, clear=False, max_stats=[0]):
 
+    try:
+        import torch
+        gpu_util = torch.cuda.utilization()
+        free, total = torch.cuda.mem_get_info()
+        gpu_mem = 100*free/total
+    except:
+        gpu_util = 0
+        gpu_mem = 0
+
     mem = psutil.virtual_memory()
     metrics.update({"cpu_util": 100*psutil.cpu_percent(),
                 "cpu_mem": 100*mem.active/mem.total,
-                "gpu_util": 0,
-                "gpu_mem": 0,
+                "gpu_util": gpu_util,
+                "gpu_mem": gpu_mem,
     })
     
     console = Console()
