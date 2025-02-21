@@ -1,0 +1,34 @@
+ALG_NAME: "ppo_mshab"
+LR: 1e-3
+NUM_ENVS: 63  # 252  # RCAD has 63 train scenes, so 252 envs -> 4 parallel envs reserved for each scene
+NUM_STEPS: 24
+TOTAL_TIMESTEPS: 1e8
+UPDATE_EPOCHS: 8
+NUM_MINIBATCHES: 4
+GAMMA: 0.99
+GAE_LAMBDA: 0.95
+CLIP_EPS: 0.2
+ENT_COEF: 0.001
+VF_COEF: 1.0
+MAX_GRAD_NORM: 1.0
+ACTIVATION: "elu"
+ANNEAL_LR: False
+
+# env specific
+ENV_NAME: "tidy_house-pick-train"
+ENV_KWARGS:
+  frame_skip: 1
+  video: True
+  video_length: 360
+  video_interval: 0.05
+
+# evaluation
+TEST_DURING_TRAINING: False 
+TEST_INTERVAL: 0 # in terms of total updates
+TEST_NUM_ENVS: 1
+EPS_TEST: 0. # 0 for greedy policy
+
+# evaluation
+EVAL_INTERVAL: 0 # in terms of total updates
+EVAL_NUM_ENVS: 1
+EPS_EVAL: 0. # 0 for greedy policy
