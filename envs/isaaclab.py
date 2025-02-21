@@ -1,25 +1,29 @@
 import argparse
 
+import jax
 import numpy as np
 import jax.numpy as jnp
 from flax import struct
 import gymnasium as gym
-import jax
+import atexit
 
 from skrl.envs.wrappers.jax.isaaclab_envs import IsaacLabWrapper, IsaacLabMultiAgentWrapper 
 
-from isaaclab.app import AppLauncher
-
 class IsaacLabEnv():
 
-    def __init__(self, env_name, num_envs=None, video=False, save_video_path=None, single_agent=True, distributed=False, device="cuda", disable_fabric=False):
+    def __init__(self, env_name, num_envs=None, seed=42, video=False, save_video_path=None, single_agent=True, distributed=False, device="cuda", disable_fabric=False):
 
         # add argparse arguments
-        parser = argparse.ArgumentParser(description="IsaacLab Envionment")
+        parser = argparse.ArgumentParser("Isaac Lab: Omniverse Robotics Environments!")
+
+        from isaaclab.app import AppLauncher
 
         AppLauncher.add_app_launcher_args(parser)
-        self.args_cli, self.hydra_args = parser.parse_known_args()
+        self.args_cli, _ = parser.parse_known_args()
+
+        self.args_cli.task = env_name
         self.args_cli.headless = True
+        self.args_cli.seed = seed
         # always enable cameras to record video
         if video:
             self.args_cli.enable_cameras = True
@@ -52,6 +56,7 @@ class IsaacLabEnv():
         # override configurations with non-hydra CLI arguments
         env_cfg.scene.num_envs = num_envs if num_envs is not None else env_cfg.scene.num_envs
         env_cfg.sim.device = device if device is not None else env_cfg.sim.device
+        env_cfg.seed = seed
 
         # multi-gpu training config
         if distributed:
@@ -74,14 +79,20 @@ class IsaacLabEnv():
             print_dict(video_kwargs, nesting=4)
             env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
+        # wrap for Jax-Pytorch convert (using SKRL)
         import skrl
         from isaaclab_rl.skrl import SkrlVecEnvWrapper
         skrl.config.jax.backend = "jax"
-        self.env = SkrlVecEnvWrapper(env, ml_framework="jax")
-        self.env = JaxLogEnvPoolWrapper(self.env)
+
+        env = SkrlVecEnvWrapper(env, ml_framework="jax")
+        self.env = JaxLogEnvPoolWrapper(env)
 
     def make_env(self):
         return self.env
+
+    @atexit.register
+    def close_the_simulator(self):
+        self.app_launcher.app.close()
 
 @struct.dataclass
 class LogEnvState:

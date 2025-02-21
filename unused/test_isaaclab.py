@@ -1,8 +1,10 @@
-import argparse
-import os
+import numpy as np
+import jax.numpy as jnp
+from flax import struct
+import gymnasium as gym
+import jax
 
-# from skrl.envs.loaders.jax import load_isaaclab_env
-# import gymnasium as gym
+from skrl.envs.wrappers.jax.isaaclab_envs import IsaacLabWrapper, IsaacLabMultiAgentWrapper 
 
 
 from typing import Optional, Sequence
@@ -37,40 +39,6 @@ def load_isaaclab_env(
     cli_args: Sequence[str] = [],
     show_cfg: bool = True,
 ):
-    """Load an Isaac Lab environment
-
-    Isaac Lab: https://isaac-sim.github.io/IsaacLab
-
-    This function includes the definition and parsing of command line arguments used by Isaac Lab:
-
-    - ``--headless``: Force display off at all times
-    - ``--cpu``: Use CPU pipeline
-    - ``--num_envs``: Number of environments to simulate
-    - ``--task``: Name of the task
-    - ``--num_envs``: Seed used for the environment
-
-    :param task_name: The name of the task (default: ``""``).
-                      If not specified, the task name is taken from the command line argument (``--task TASK_NAME``).
-                      Command line argument has priority over function parameter if both are specified
-    :type task_name: str, optional
-    :param num_envs: Number of parallel environments to create (default: ``None``).
-                     If not specified, the default number of environments defined in the task configuration is used.
-                     Command line argument has priority over function parameter if both are specified
-    :type num_envs: int, optional
-    :param headless: Whether to use headless mode (no rendering) (default: ``None``).
-                     If not specified, the default task configuration is used.
-                     Command line argument has priority over function parameter if both are specified
-    :type headless: bool, optional
-    :param cli_args: Isaac Lab configuration and command line arguments (default: ``[]``)
-    :type cli_args: list of str, optional
-    :param show_cfg: Whether to print the configuration (default: ``True``)
-    :type show_cfg: bool, optional
-
-    :raises ValueError: The task name has not been defined, neither by the function parameter nor by the command line arguments
-
-    :return: Isaac Lab environment
-    :rtype: gymnasium.Env
-    """
     import argparse
     import atexit
     import gymnasium
@@ -179,8 +147,13 @@ def load_isaaclab_env(
     # load environment
     env = gymnasium.make(args.task, cfg=cfg, render_mode="rgb_array" if args.video else None)
 
+    from isaaclab.envs import multi_agent_to_single_agent
+
+    env = multi_agent_to_single_agent(env)
+
     from isaaclab_rl.skrl import SkrlVecEnvWrapper
     env = SkrlVecEnvWrapper(env, ml_framework="jax")
+    env = JaxLogEnvPoolWrapper(env)
     
     return env
 
@@ -206,3 +179,82 @@ class IsaacLabEnv():
 
     def make_env(self):
         return self.env
+    
+
+@struct.dataclass
+class LogEnvState:
+    episode_returns: jnp.array
+    episode_lengths: jnp.array
+    returned_episode_returns: jnp.array
+    returned_episode_lengths: jnp.array
+
+
+class JaxLogEnvPoolWrapper(IsaacLabWrapper):
+
+    def __init__(self, env, reset_info=True, async_mode=True):
+        super(JaxLogEnvPoolWrapper, self).__init__(env)
+        self.env = env
+
+    def reset(self, **kwargs):
+        observations, infos = self.env.reset(**kwargs)
+
+        env_state = LogEnvState(
+            jnp.zeros(self.num_envs, dtype=jnp.float32),
+            jnp.zeros(self.num_envs, dtype=jnp.float32),
+            jnp.zeros(self.num_envs, dtype=jnp.float32),
+            jnp.zeros(self.num_envs, dtype=jnp.float32),
+        )
+        return observations, env_state
+
+    def step(self, state, action):
+
+        state = jax.device_put(state, device=jax.sharding.SingleDeviceSharding(jax.devices()[0]))
+        print(action)
+        # action = jax.device_put(action, device=jax.sharding.SingleDeviceSharding(jax.devices()[0]))
+
+        observations, rewards, terminated, truncated, infos_ = self.env.step(
+            action
+        )
+
+        rewards = rewards.squeeze()
+        terminated = terminated.squeeze()
+        truncated = truncated.squeeze()
+    
+        new_episode_return = state.episode_returns + rewards
+        new_episode_length = state.episode_lengths + 1
+        state = state.replace(
+            episode_returns=(new_episode_return)
+            * (1 - terminated)
+            * (1 - truncated),
+            episode_lengths=(new_episode_length)
+            * (1 - terminated)
+            * (1 - truncated),
+            returned_episode_returns=jnp.where(
+                terminated + truncated,
+                new_episode_return,
+                state.returned_episode_returns,
+            ),
+            returned_episode_lengths=jnp.where(
+                terminated + truncated,
+                new_episode_length,
+                state.returned_episode_lengths,
+            ),
+        )
+
+        # if self.reset_info:
+        #     elapsed_steps = infos["elapsed_step"]
+        #     terminated = infos["terminated"] + infos["TimeLimit.truncated"]
+        
+        infos = {}
+        infos["returned_episode_returns"] = state.returned_episode_returns
+        infos["returned_episode_lengths"] = state.returned_episode_lengths
+        infos["returned_episode"] = terminated
+
+        return (
+            observations,
+            state,
+            rewards,
+            terminated,
+            truncated,
+            infos,
+        )
