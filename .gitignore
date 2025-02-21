@@ -49,5 +49,9 @@ coverage.xml
 # Sphinx documentation
 docs/_build/
 
+# Logs folders
+outputs/
+logs/
+
 # Other misc files
 purejaxrl_dqn.py
