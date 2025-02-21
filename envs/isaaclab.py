@@ -11,7 +11,9 @@ from skrl.envs.wrappers.jax.isaaclab_envs import IsaacLabWrapper, IsaacLabMultiA
 
 class IsaacLabEnv():
 
-    def __init__(self, env_name, num_envs=None, seed=42, video=False, save_video_path=None, single_agent=True, distributed=False, device="cuda", disable_fabric=False):
+    def __init__(self, env_name, num_envs=None, seed=42, 
+                 video=False, save_video_path=None, video_interval=50000, video_length=360,
+                 single_agent=True, distributed=False, device="cuda", disable_fabric=False):
 
         # add argparse arguments
         parser = argparse.ArgumentParser("Isaac Lab: Omniverse Robotics Environments!")
@@ -71,8 +73,8 @@ class IsaacLabEnv():
         if video:
             video_kwargs = {
                 "video_folder": os.path.join(save_video_path, "videos", "train"),
-                "step_trigger": lambda step: step % self.args_cli.video_interval == 0,
-                "video_length": self.args_cli.video_length,
+                "step_trigger": lambda step: step % video_interval == 0,
+                "video_length": video_length,
                 "disable_logger": True,
             }
             print("[INFO] Recording videos during training.")

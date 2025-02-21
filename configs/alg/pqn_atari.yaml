@@ -31,5 +31,5 @@ EPS_TEST: 0. # 0 for greedy test policy
 
 # evaluation
 EVAL_INTERVAL: 0.05 # in terms of total updates
-EVAL_NUM_ENVS: 10
+EVAL_NUM_ENVS: 16
 EPS_EVAL: 0. # 0 for greedy policy

@@ -17,6 +17,8 @@ from models.ppo_mlp_isaaclab import ContinuousActorCritic
 from data.transition import ContinuousTransition 
 from utils.common_utils import log_callback, save_state, print_dashboard, get_time, get_time_diff
 
+from utils.common_utils import save_path
+
 from envs.isaaclab import IsaacLabEnv
 
 class CustomTrainState(TrainState):
@@ -45,12 +47,14 @@ class PPOIsaacAgent():
             config["NUM_ENVS"] * config["NUM_STEPS"] // config["NUM_MINIBATCHES"]
         )
 
-        self.env = IsaacLabEnv(config["ENV_NAME"], config["NUM_ENVS"]).make_env()
+        self.env = IsaacLabEnv(config["ENV_NAME"], config["NUM_ENVS"], config["SEED"], 
+                               config["ENV_KWARGS"]["video"], save_path, 
+                               config["ENV_KWARGS"]["video_interval"], config["ENV_KWARGS"]["video_length"]).make_env()
         
         # self.eval_env = IsaacLabEnv(config["ENV_NAME"], config["TEST_NUM_ENVS"]).make_env()
 
         self.config["TEST_NUM_STEPS"] = config.get(
-            "TEST_NUM_STEPS", 1,
+            "TEST_NUM_STEPS", 0,
         )
 
 

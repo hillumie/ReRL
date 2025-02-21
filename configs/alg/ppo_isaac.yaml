@@ -18,14 +18,17 @@ ANNEAL_LR: False
 ENV_NAME: "Isaac-Reach-Franka-v0"
 ENV_KWARGS:
   frame_skip: 1
+  video: True
+  video_length: 360
+  video_interval: 0.05
 
 # evaluation
-TEST_DURING_TRAINING: True 
-TEST_INTERVAL: 0.05 # in terms of total updates
+TEST_DURING_TRAINING: False 
+TEST_INTERVAL: 0 # in terms of total updates
 TEST_NUM_ENVS: 1024
 EPS_TEST: 0. # 0 for greedy policy
 
 # evaluation
-EVAL_INTERVAL: 0.05 # in terms of total updates
+EVAL_INTERVAL: 0 # in terms of total updates
 EVAL_NUM_ENVS: 1024
 EPS_EVAL: 0. # 0 for greedy policy
