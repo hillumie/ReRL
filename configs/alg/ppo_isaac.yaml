@@ -15,7 +15,6 @@ ACTIVATION: "elu"
 ANNEAL_LR: False
 
 # env specific
-# ENV_NAME: "CartPole-v1" # Acrobot-v1
 ENV_NAME: "Isaac-Reach-Franka-v0"
 ENV_KWARGS:
   frame_skip: 1
@@ -23,10 +22,10 @@ ENV_KWARGS:
 # evaluation
 TEST_DURING_TRAINING: True 
 TEST_INTERVAL: 0.05 # in terms of total updates
-TEST_NUM_ENVS: 8
+TEST_NUM_ENVS: 1024
 EPS_TEST: 0. # 0 for greedy policy
 
 # evaluation
 EVAL_INTERVAL: 0.05 # in terms of total updates
-EVAL_NUM_ENVS: 4096
+EVAL_NUM_ENVS: 1024
 EPS_EVAL: 0. # 0 for greedy policy

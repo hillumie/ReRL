@@ -20,7 +20,7 @@ CSV_LOG: True
 TENSORBOARD_LOG: False
 
 SAVE_STATE: False  # save models, states
-SAVE_INTERVAL: 0.05
+SAVE_INTERVAL: 0.25
 
 # wandb params
 WANDB_MODE: "disabled"  # set to online to activate wandb, set to disabled to deactivate wandb
@@ -29,5 +29,5 @@ PROJECT: "ps_template_pqn"
 alg:
   WANDB_LOG_ALL_SEEDS: False # will log all the vmapped seeds separetely
 
-# where to save the params (if None, will not save)
-SAVE_PATH: "./outputs/"
+# where to save the params (if None, will use default path)
+SAVE_PATH: None

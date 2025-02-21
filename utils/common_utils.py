@@ -29,7 +29,10 @@ def init_log(config):
     global_config = config
 
     global save_path
-    save_path = config["SAVE_PATH"]
+    if config["SAVE_PATH"] != "None":
+        save_path = config["SAVE_PATH"]
+    else:
+        save_path = os.path.join("logs", config["ENV_NAME"], config["ALG_NAME"], f"seed-{config['SEED']}")
     os.makedirs(save_path, exist_ok=True)
     if not config["WANDB_LOG_ALL_SEEDS"] and config["WANDB_MODE"] != "disabled":
         wandb.init(
@@ -49,12 +52,9 @@ def init_log(config):
         save_state_path = os.path.abspath(save_path + f"/models")
         os.makedirs(os.path.dirname(save_state_path), exist_ok=True)
         orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
-        # options = orbax.checkpoint.CheckpointManagerOptions(max_to_keep=config["MAX_SAVED_MODELS"], create=True)
         global checkpoint_manager
         checkpoint_manager = orbax.checkpoint.CheckpointManager(
             save_state_path, orbax_checkpointer)
-            # save_state_path, orbax_checkpointer, options)
-
 
 
 
@@ -202,9 +202,12 @@ def save_state(ckpt, iteration):
 
 
 
-def load_state(iteration, latest=False):
+def load_state(iteration=None, latest=False):
     if latest:  # ignore inputted iteration and get latest iteration
         iteration = checkpoint_manager.latest_step()
+    
+    if iteration is None:
+        raise ValueError("Either iteration is not None or lastest is True")
     
     restored = checkpoint_manager.restore(iteration)
 
@@ -214,6 +217,7 @@ def load_state(iteration, latest=False):
 # Standard JAX only supports 32 bits while time.time() returns a float64 time value precising up to nanosec
 # When convert this to JAX type, the time value loses all decimal
 # Use time.time_ns() to get full time (up to nanosec) in int32 so that it does not lose precision 
+# Split this time into integer and decimal parts
 def get_p_time():
     t = time.time_ns()
     t_dec = t%(10**9)
@@ -223,8 +227,8 @@ def get_p_time():
 def get_time():
     return jax.experimental.io_callback(lambda: jnp.array(get_p_time()), jax.eval_shape(lambda: jnp.array([jnp.int32(0), jnp.int32(0)])))
 
-# Integer part gets small, the decimal part is regularized to float32 from dividing to 10^9
-# Add these 2 parts to have the real time with highese precision possible 
+# After subtracting, integer part gets small, the decimal part is regularized to float32 from dividing to 10^9
+# Add these 2 parts to have the real time with highest precision possible 
 def get_time_diff(time1, time2):
     diff = time1 - time2
     real_time = diff[0] + diff[1]/(10**9)
@@ -316,7 +320,7 @@ def print_dashboard(metrics, losses, global_step, epoch,
     table.add_column(justify="center", width=13)
     table.add_column(justify="right", width=13)
     table.add_row(
-        f':blowfish: {c1}Dashboard',
+        f'{c1}Dashboard',
         f'{c1}CPU: {c3}{cpu_percent:.1f}%',
         f'{c1}GPU: {c3}{gpu_percent:.1f}%',
         f'{c1}DRAM: {c3}{dram_percent:.1f}%',
@@ -380,7 +384,7 @@ def print_dashboard(metrics, losses, global_step, epoch,
 
     table = Table(box=None, expand=True, pad_edge=False)
     dashboard.add_row(table)
-    table.add_row(f' {c1}Message: {c2}Shout out to :blowfish: Pufferlib for this cool dashboard')
+    table.add_row(f' {c1}Message: {c2}Shout out to :blowfish: {b2}Pufferlib {c2}for this cool dashboard')
 
     with console.capture() as capture:
         console.print(dashboard)
