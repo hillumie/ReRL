@@ -397,7 +397,7 @@ def make_train(config):
                     eval_env.env_human_score - eval_env.env_random_score
                 )
             eval_metrics = {
-                "eval_returned_episode_returns": eval_state.returned_episode_lengths.mean(),
+                "eval_returned_episode_returns": eval_state.returned_episode_returns.mean(),
                 "eval_normalized_returned_episode_returns": normalize_score(eval_state.returned_episode_returns.mean()),
                 "eval_returned_episode_lengths": eval_state.returned_episode_lengths.mean()
             }
