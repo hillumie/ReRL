@@ -33,46 +33,58 @@ class Agent():
         self.env_name = self.config["ENV_NAME"]
 
         init_log(self.config)
-        rng = jax.random.PRNGKey(self.config["SEED"])
+
+        self.pure_jax = True
 
         start_time = time.time()
-        if self.config["ALG_NAME"] == "pqn_atari":
-            from agents.pqn_atari_agent import make_train
-            self.agent = jax.jit(make_train(self.config))
-        elif self.config["ALG_NAME"] == "pqn_gymnax":
-            # from agents.pqn_gymnax_agent import make_train
-            # self.agent = jax.jit(make_train(self.config))
-            from agents.impure_pqn_gymnax_agent import PQNGymnaxAgent
-            self.agent = PQNGymnaxAgent(self.config, rng)
-        elif self.config["ALG_NAME"] == "pqn_craftax":
-            from agents.pqn_craftax_agent import make_train
-            self.agent = jax.jit(make_train(self.config))
-        elif self.config["ALG_NAME"] == "pqn_minatar":
-            from agents.pqn_minatar_agent import make_train
-            self.agent = jax.jit(make_train(self.config))
-        elif self.config["ALG_NAME"] == "ppo_continuous":
-            from agents.impure_ppo_continuous_agent import PPOContinuousAgent
-            self.agent = PPOContinuousAgent(self.config, rng)
-        elif self.config["ALG_NAME"] == "ppo_isaac":
-            from agents.impure_ppo_isaaclab_agent import PPOIsaacAgent
-            self.agent = PPOIsaacAgent(self.config, rng)
-        elif self.config["ALG_NAME"] == "ppo_mshab":
-            from agents.impure_ppo_mshab_agent import PPOMSHABAgent
-            self.agent = PPOMSHABAgent(self.config, rng)
+        if self.pure_jax:
+            if self.config["ALG_NAME"] == "pqn_atari":
+                from agents.pqn_atari_agent import make_train
+                self.agent = jax.jit(make_train(self.config))
+            elif self.config["ALG_NAME"] == "pqn_gymnax":
+                from agents.pqn_gymnax_agent import make_train
+                self.agent = jax.jit(make_train(self.config))
+            elif self.config["ALG_NAME"] == "pqn_craftax":
+                from agents.pqn_craftax_agent import make_train
+                self.agent = jax.jit(make_train(self.config))
+            elif self.config["ALG_NAME"] == "pqn_minatar":
+                from agents.pqn_minatar_agent import make_train
+                self.agent = jax.jit(make_train(self.config))
+            elif self.config["ALG_NAME"] == "pqn_rnd_atari":
+                from agents.pqn_rnd_atari_agent import make_train
+                self.agent = jax.jit(make_train(self.config))
+            else:
+                raise NotImplemented(f"{self.config['ALG_NAME']} is not yet implemented")
         else:
-            raise NotImplemented(f"{self.config['ALG_NAME']} is not yet implemented")
+            rng = jax.random.PRNGKey(self.config["SEED"])
+            if self.config["ALG_NAME"] == "pqn_gymnax":
+                from agents.impure_pqn_gymnax_agent import PQNGymnaxAgent
+                self.agent = PQNGymnaxAgent(self.config, rng)
+            elif self.config["ALG_NAME"] == "ppo_continuous":
+                from agents.impure_ppo_continuous_agent import PPOContinuousAgent
+                self.agent = PPOContinuousAgent(self.config, rng)
+            elif self.config["ALG_NAME"] == "ppo_isaac":
+                from agents.impure_ppo_isaaclab_agent import PPOIsaacAgent
+                self.agent = PPOIsaacAgent(self.config, rng)
+            elif self.config["ALG_NAME"] == "ppo_mshab":
+                from agents.impure_ppo_mshab_agent import PPOMSHABAgent
+                self.agent = PPOMSHABAgent(self.config, rng)
+            else:
+                raise NotImplemented(f"{self.config['ALG_NAME']} is not yet implemented")
         
         print(f"Take {time.time() - start_time:.2f} seconds to compile")
     
     def run(self):
         
-        # rng = jax.random.PRNGKey(self.config["SEED"])
         t0 = time.time()
         if self.config["NUM_SEEDS"] > 1:
             raise NotImplementedError("Vmapped seeds not supported yet.")
         else:
-            # outs = self.agent(rng)
-            outs = self.agent.run()
+            if self.pure_jax:
+                rng = jax.random.PRNGKey(self.config["SEED"])
+                outs = self.agent(rng)
+            else:
+                outs = self.agent.run()
         print(f"Took {time.time()-t0} seconds to complete.")
 
         # save hyperparams

@@ -34,7 +34,6 @@ def make_train(config):
     config["NUM_UPDATES"] = (
         config["TOTAL_TIMESTEPS"] // config["NUM_STEPS"] // config["NUM_ENVS"]
     )
-    print(config["NUM_UPDATES"])
 
     config["NUM_UPDATES_DECAY"] = (
         config["TOTAL_TIMESTEPS_DECAY"] // config["NUM_STEPS"] // config["NUM_ENVS"]
@@ -88,7 +87,7 @@ def make_train(config):
             init_x = jnp.zeros((1, *env.single_observation_space.shape))
             network_variables = network.init(rng, init_x, train=False)
 
-            tabulate_fn = nn.tabulate(network, jax.random.PRNGKey(0))
+            tabulate_fn = nn.tabulate(network, jax.random.PRNGKey(config["SEED"]))
             print(tabulate_fn(init_x, train=False))
 
             tx = optax.chain(
@@ -326,6 +325,7 @@ def make_train(config):
             metrics["losses"].update({
                 "q_value_loss": loss.mean(),
                 "q_values": qvals.mean(),
+                "lambda_target": lambda_targets.mean(),
             })
 
             metrics["general"].update({k: v.mean() for k, v in infos.items()})
