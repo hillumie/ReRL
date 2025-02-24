@@ -149,7 +149,6 @@ def log_callback(metrics, global_metrics, original_seed, config):
     general_ = metrics["general"]
     losses_ = metrics["losses"]
     time_ = metrics["time"]
-    misc_ = metrics["misc"]
     eval_ = global_metrics["eval"]
 
     if not config["WANDB_LOG_ALL_SEEDS"] and config["WANDB_MODE"] != "disabled":
@@ -175,25 +174,29 @@ def log_callback(metrics, global_metrics, original_seed, config):
         print("ignore tensorboard since torch is not supported")
 
     if config.get("PRINT", True):
-        all_metrics = dict()
-        all_metrics.update(general_)
-        all_metrics.update(losses_)
-        all_metrics.update(global_metrics)
-        all_metrics.update(misc_)
-        other_metrics = general_
-        other_metrics.update(eval_)
-        SPS = (all_metrics["env_frames"] - all_metrics["prev_steps"]) / (time_["uptime"] - global_metrics["uptime"])
-        all_metrics.update({"SPS": SPS,
-                        "remaining": (config["TOTAL_TIMESTEPS"] * config["ENV_KWARGS"]["frame_skip"] - all_metrics["env_frames"]) / SPS,
-        })
+        print_callback(metrics, global_metrics, original_seed, config)
+        
+def print_callback(metrics, global_metrics, original_seed, config):
+    all_metrics = dict()
+    time_ = metrics["time"]
+    losses_ = metrics["losses"]
+    all_metrics.update(metrics["general"])
+    all_metrics.update(metrics["losses"])
+    all_metrics.update(global_metrics)
+    all_metrics.update(metrics["misc"])
+    other_metrics = metrics["general"]
+    other_metrics.update(global_metrics["eval"])
+    SPS = (all_metrics["env_frames"] - all_metrics["prev_steps"]) / (time_["uptime"] - global_metrics["uptime"])
+    all_metrics.update({"SPS": SPS,
+                    "remaining": (config["TOTAL_TIMESTEPS"] * config["ENV_KWARGS"]["frame_skip"] - all_metrics["env_frames"]) / SPS,
+    })
 
-        all_metrics["misc_time"] = all_metrics["uptime"] - all_metrics["env_time"] - all_metrics["train_time"] - all_metrics["eval_time"]
+    all_metrics["misc_time"] = all_metrics["uptime"] - all_metrics["env_time"] - all_metrics["train_time"] - all_metrics["eval_time"]
 
-        if config.get("DASHBOARD", True):
-            jax.debug.callback(print_dashboard, all_metrics, losses_, all_metrics["env_frames"], all_metrics["iterations"], other_metrics, True)
-        else:
-            jax.debug.callback(casual_print, all_metrics)
-
+    if config.get("DASHBOARD", False):
+        jax.debug.callback(print_dashboard, all_metrics, losses_, all_metrics["env_frames"], all_metrics["iterations"], other_metrics, True)
+    else:
+        jax.debug.callback(casual_print, all_metrics)
 
 
 def save_state(ckpt, iteration):

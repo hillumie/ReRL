@@ -16,7 +16,7 @@ from typing import Any
 from models.pqn_rnd_cnn import QNetwork, FeatureCNN
 from data.transition import Transition 
 from utils.tech_utils import *
-from utils.common_utils import log_callback, save_state, print_dashboard, get_time, get_time_diff
+from utils.common_utils import log_callback, print_callback, save_state, get_time, get_time_diff
 
 from envs.envpool import make_env
 
@@ -708,7 +708,7 @@ def make_train(config):
 
             train_state = train_state.replace(
                 timesteps=train_state.timesteps + config["NUM_STEPS"] * config["NUM_ENVS"],
-                n_updates=train_state.n_updates + 1
+                # n_updates=train_state.n_updates + 1
             )  # update timesteps count for random walk
 
 
@@ -724,7 +724,7 @@ def make_train(config):
             metrics["time"].update({"uptime": get_time_diff(get_time(), global_st)})
 
             # report statistics
-            log_callback(metrics, global_metrics, original_seed, config)
+            print_callback(metrics, global_metrics, original_seed, config)
 
             global_metrics["env_time"] += metrics["time"]["env_time"]
             global_metrics["uptime"] = metrics["time"]["uptime"]
