@@ -36,6 +36,12 @@ def make_train(config):
         config["TOTAL_TIMESTEPS"] // config["NUM_STEPS"] // config["NUM_ENVS"]
     )
 
+    config["NUM_RANDOM"] = int(
+        config["NUM_UPDATES"] * config["RANDOM_WALK_PROPORTION"]
+    )
+
+    config["NUM_UPDATES"] = config["NUM_UPDATES"] - config["NUM_RANDOM"]
+
     config["NUM_UPDATES_DECAY"] = (
         config["TOTAL_TIMESTEPS_DECAY"] // config["NUM_STEPS"] // config["NUM_ENVS"]
     )
@@ -242,7 +248,7 @@ def make_train(config):
                     lambda x: x[:, : -config["TEST_ENVS"]], transitions
                 )
 
-            (_, rewems), curiosity_reward_per_env = jax.lax.scan(update_reward_forward_filter, (config["GAMMA"], rewems), transitions.curiosity_reward)
+            (_, rewems), curiosity_reward_per_env = jax.lax.scan(update_reward_forward_filter, (config["INT_GAMMA"], rewems), transitions.curiosity_reward)
 
             mean, std, count = (
                 jnp.mean(curiosity_reward_per_env),
@@ -250,6 +256,8 @@ def make_train(config):
                 curiosity_reward_per_env.shape[0]
             )
             reward_rms = update_from_moments(reward_rms, mean, std**2, count)
+
+            metrics["losses"].update({"int_reward": transitions.curiosity_reward.mean()})
 
 
             transitions = Transition(
@@ -278,20 +286,20 @@ def make_train(config):
                 + config["NUM_STEPS"] * config["NUM_ENVS"]
             )  # update timesteps count
 
-            def _compute_targets(last_q, q_vals, reward, done):
+            def _compute_targets(last_q, q_vals, reward, done, gamma_):
                 def _get_target(lambda_returns_and_next_q, rew_q_done):
                     reward, q, done = rew_q_done
                     lambda_returns, next_q = lambda_returns_and_next_q
-                    target_bootstrap = reward + config["GAMMA"] * (1 - done) * next_q
+                    target_bootstrap = reward + gamma_ * (1 - done) * next_q
                     delta = lambda_returns - next_q
                     lambda_returns = (
-                        target_bootstrap + config["GAMMA"] * config["LAMBDA"] * delta
+                        target_bootstrap + gamma_ * config["LAMBDA"] * delta
                     )
                     lambda_returns = (1 - done) * lambda_returns + done * reward
                     next_q = jnp.max(q, axis=-1)
                     return (lambda_returns, next_q), lambda_returns
 
-                lambda_returns = reward[-1] + config["GAMMA"] * (1 - done[-1]) * last_q
+                lambda_returns = reward[-1] + gamma_ * (1 - done[-1]) * last_q
                 last_q = jnp.max(q_vals[-1], axis=-1)
                 _, targets = jax.lax.scan(
                     _get_target,
@@ -317,7 +325,7 @@ def make_train(config):
             last_q = jnp.max(last_q, axis=-1)
 
             lambda_targets = _compute_targets(
-                last_q, transitions.q_val, transitions.reward, transitions.done
+                last_q, transitions.q_val, transitions.reward, transitions.done, config["GAMMA"],
             )
 
 
@@ -335,7 +343,7 @@ def make_train(config):
             int_done = jnp.zeros_like(transitions.done) # Done flags are never turned on when calculating intrinsic values
 
             int_lambda_targets = _compute_targets(
-                int_last_q, transitions.int_q_val, transitions.curiosity_reward, int_done
+                int_last_q, transitions.int_q_val, transitions.curiosity_reward, int_done, config["INT_GAMMA"],
             )
 
 
@@ -508,21 +516,28 @@ def make_train(config):
 
             # Learn external q function
             rng, _rng = jax.random.split(rng)
-            (train_state, minibatches, targets, rng), (loss, qvals) = jax.lax.scan(
+            (train_state, _, _, rng), (loss, qvals) = jax.lax.scan(
                 _learn_epoch, (train_state, minibatches, targets, rng), None, config["NUM_EPOCHS"]
             )
 
 
             # Learn intrinsic q function
             rng, _rng = jax.random.split(rng)
-            (int_train_state, minibatches, int_targets, rng), (int_loss, int_qvals) = jax.lax.scan(
+            (int_train_state, _, _, rng), (int_loss, int_qvals) = jax.lax.scan(
                 _learn_int_epoch, (int_train_state, minibatches, int_targets, rng), None, config["NUM_EPOCHS"]
             )
 
             # Learn RND feature function
+            # Feature predictor is only updated using a proportion of full experiences
+            rnd_minibatches = jax.tree_util.tree_map(
+                    lambda x: x[:int(x.shape[0]*config["RND_UPDATE_PROPORTION"])], minibatches
+                )  # num_actors*num_envs (batch_size), ...
             rng, _rng = jax.random.split(rng)
-            (rnd_train_state, minibatches, rng), rnd_loss = jax.lax.scan(
-                _learn_rnd_epoch, (rnd_train_state, minibatches, rng), None, config["NUM_EPOCHS"]
+            (rnd_train_state, _, rng), rnd_loss = jax.lax.scan(
+                _learn_rnd_epoch, 
+                (rnd_train_state, rnd_minibatches, rng), 
+                None, 
+                config["NUM_EPOCHS"]
             )
 
             train_state = train_state.replace(n_updates=train_state.n_updates + 1)
@@ -568,6 +583,8 @@ def make_train(config):
                 "rnd_loss": rnd_loss.mean(),
                 "lambda_target": lambda_targets.mean(),
                 "int_lambda_target": int_lambda_targets.mean(),
+                "ext_reward": transitions.reward.mean(),
+                # "int_reward": transitions.curiosity_reward.mean(),
             })
 
             metrics["general"].update({k: v.mean() for k, v in infos.items()})
@@ -648,6 +665,71 @@ def make_train(config):
             return eval_metrics
         
 
+
+
+        def _random_walk_and_update_rms(random_runner_state, unused):
+
+            st = get_time()
+
+            train_state, expl_state, global_metrics, obs_rms, rng = random_runner_state
+
+            metrics = {"general": {}, "losses": {}, "time": {}, "misc": {}}
+            metrics["misc"].update({"prev_steps": train_state.timesteps * config["ENV_KWARGS"]["frame_skip"]})
+            
+            def _random_walk(carry, unused):
+                last_obs, env_state, rng = carry
+                rng, _rng = jax.random.split(rng)
+
+                random_action = jax.random.randint(
+                        _rng, shape=(total_envs,), minval=0, maxval=env.single_action_space.n
+                )  # sample random actions,
+
+                new_obs, new_env_state, reward, done, info = env.step(
+                    env_state, random_action
+                )
+
+                return (new_obs, new_env_state, rng), new_obs 
+
+            rng, _rng = jax.random.split(rng)
+            (*expl_state, rng), tran_obs = jax.lax.scan(
+                _random_walk, (*expl_state, _rng), None, config["NUM_STEPS"]
+            )
+            
+            if config.get("TEST_DURING_TRAINING", False):
+                # remove testing envs
+                tran_obs = tran_obs[:, : -config["TEST_ENVS"]]
+
+            obs_rms = update_rms(obs_rms, tran_obs.reshape((-1,) + env.observation_space.shape))
+
+            train_state = train_state.replace(
+                timesteps=train_state.timesteps + config["NUM_STEPS"] * config["NUM_ENVS"],
+                n_updates=train_state.n_updates + 1
+            )  # update timesteps count for random walk
+
+
+            metrics["general"].update({
+                "iterations": train_state.n_updates,
+                "env_steps": train_state.timesteps,
+                "env_frames": train_state.timesteps * config["ENV_KWARGS"]["frame_skip"],
+                "grad_steps": train_state.grad_steps,
+            })
+
+            metrics["misc"].update({"start_time": global_st})
+            metrics["time"].update({"env_time": get_time_diff(get_time(), st)})
+            metrics["time"].update({"uptime": get_time_diff(get_time(), global_st)})
+
+            # report statistics
+            log_callback(metrics, global_metrics, original_seed, config)
+
+            global_metrics["env_time"] += metrics["time"]["env_time"]
+            global_metrics["uptime"] = metrics["time"]["uptime"]
+
+            expl_state = tuple(expl_state)
+            random_runner_state = train_state, expl_state, global_metrics, obs_rms, rng
+
+            return random_runner_state, rng
+    
+
         # train
         global_metrics = dict(
             env_time = 0.0,
@@ -662,7 +744,16 @@ def make_train(config):
         
 
         rng, _rng = jax.random.split(rng)
-        expl_state = (init_obs, env_state)
+
+        random_runner_state, _ = jax.lax.scan(
+            _random_walk_and_update_rms, (train_state, (init_obs, env_state), global_metrics, obs_rms, rng), None, config["NUM_RANDOM"]
+        )
+
+        train_state, expl_state, global_metrics, obs_rms, rng = random_runner_state
+
+
+        rng, _rng = jax.random.split(rng)
+
         full_train_state = (train_state, int_train_state, rnd_train_state, obs_rms, reward_rms, rewems)
         runner_state = (full_train_state, expl_state, global_metrics, _rng)
 
