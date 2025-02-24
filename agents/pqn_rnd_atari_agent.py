@@ -162,6 +162,25 @@ def make_train(config):
             metrics["misc"].update({"prev_steps": train_state.timesteps * config["ENV_KWARGS"]["frame_skip"]})
 
 
+
+
+
+            # EVALUATE AGENT
+            st = get_time()
+
+            rng, _rng = jax.random.split(rng)
+            eval_metrics = jax.lax.cond(jnp.logical_or(train_state.n_updates % int(config["NUM_UPDATES"]*config["EVAL_INTERVAL"]) == 0, 
+                                                       train_state.n_updates == config["NUM_UPDATES"]), 
+                                        lambda _: eval_agent(train_state, _rng), lambda _: global_metrics["eval"], operand=None)
+            
+            global_metrics["eval"] = eval_metrics
+
+            metrics["time"].update({"eval_time": get_time_diff(get_time(), st)})
+
+
+
+
+
             # SAMPLE PHASE
             st = get_time()
 
@@ -548,20 +567,6 @@ def make_train(config):
 
 
 
-            # EVALUATE AGENT
-            st = get_time()
-            
-            eval_metrics = jax.lax.cond(jnp.logical_or(train_state.n_updates % int(config["NUM_UPDATES"]*config["EVAL_INTERVAL"]) == 0, 
-                                                       train_state.n_updates == config["NUM_UPDATES"]), 
-                                        lambda _: eval_agent(train_state, _rng), lambda _: global_metrics["eval"], operand=None)
-            
-            global_metrics["eval"] = eval_metrics
-
-            metrics["time"].update({"eval_time": get_time_diff(get_time(), st)})
-
-
-
-
 
             # REPORT METRICS
             if config.get("TEST_DURING_TRAINING", False):
@@ -739,8 +744,11 @@ def make_train(config):
         )
 
         rng, _rng = jax.random.split(rng)
-        eval_metrics = eval_agent(train_state, _rng)
-        global_metrics.update({"eval": eval_metrics})
+        global_metrics.update({"eval": {
+            "eval_returned_episode_returns": 0.0,
+            "eval_normalized_returned_episode_returns": 0.0,
+            "eval_returned_episode_lengths": 0.0,
+        }})
         
 
         rng, _rng = jax.random.split(rng)
