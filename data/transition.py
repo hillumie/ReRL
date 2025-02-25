@@ -11,7 +11,7 @@ class Transition:
     reward: chex.Array
     done: chex.Array
     q_val: chex.Array
-    int_q_val: chex.Array = jnp.array([0])
+    # int_q_val: chex.Array = jnp.array([0])
     curiosity_reward: chex.Array = jnp.array([0])
     rnd_next_obs: chex.Array = jnp.array([0])
 

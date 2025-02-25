@@ -51,7 +51,7 @@ class Agent():
                 from agents.pqn_minatar_agent import make_train
                 self.agent = jax.jit(make_train(self.config))
             elif self.config["ALG_NAME"] == "pqn_rnd_atari":
-                from agents.pqn_rnd_atari_agent import make_train
+                from agents.simplified_pqn_rnd_atari_agent import make_train
                 self.agent = jax.jit(make_train(self.config))
             else:
                 raise NotImplemented(f"{self.config['ALG_NAME']} is not yet implemented")

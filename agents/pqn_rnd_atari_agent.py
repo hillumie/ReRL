@@ -330,9 +330,6 @@ def make_train(config):
                 return targets
 
 
-
-
-            # Compute external targets
             last_q = network.apply(
                 {
                     "params": train_state.params,
@@ -341,14 +338,7 @@ def make_train(config):
                 transitions.next_obs[-1],
                 train=False,
             )
-            last_q = jnp.max(last_q, axis=-1)
 
-            lambda_targets = _compute_targets(
-                last_q, transitions.q_val, transitions.reward, transitions.done, config["GAMMA"],
-            )
-
-
-            # Compute intrinsic targets
             int_last_q = int_network.apply(
                 {
                     "params": int_train_state.params,
@@ -357,7 +347,30 @@ def make_train(config):
                 transitions.next_obs[-1],
                 train=False,
             )
-            int_last_q = jnp.max(int_last_q, axis=-1)
+
+            max_action = jnp.argmax(last_q * config["EXT_COEF"] + int_last_q * config["EXT_COEF"], axis=-1)
+
+
+            # Compute external targets
+            # last_q = jnp.max(last_q, axis=-1)
+            last_q = jnp.take_along_axis(last_q, max_action.reshape(max_action.shape[0], 1), axis=-1).squeeze()
+
+            lambda_targets = _compute_targets(
+                last_q, transitions.q_val, transitions.reward, transitions.done, config["GAMMA"],
+            )
+
+
+            # Compute intrinsic targets
+            # int_last_q = int_network.apply(
+            #     {
+            #         "params": int_train_state.params,
+            #         "batch_stats": int_train_state.batch_stats,
+            #     },
+            #     transitions.next_obs[-1],
+            #     train=False,
+            # )
+            # int_last_q = jnp.max(int_last_q, axis=-1)
+            int_last_q = jnp.take_along_axis(int_last_q, max_action.reshape(max_action.shape[0], 1), axis=-1).squeeze()
 
             int_done = jnp.zeros_like(transitions.done) # Done flags are never turned on when calculating intrinsic values
 
