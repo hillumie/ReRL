@@ -13,7 +13,7 @@ from functools import partial
 
 from typing import Any
 
-from models.ppo_rnd_atari import ActorCritic, FeatureRNDCNN, TargetFeatureRNDCNN
+from models.ppo_rnd_cnn import ActorCritic, FeatureRNDCNN, TargetFeatureRNDCNN
 from data.transition import PPORNDTransition 
 from utils.tech_utils import *
 from utils.common_utils import log_callback, print_callback, save_state, get_time, get_time_diff

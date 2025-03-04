@@ -47,3 +47,15 @@ class PPORNDTransition(NamedTuple):
     obs: jnp.ndarray
     curiosity_reward: jnp.ndarray = jnp.array([0])
     rnd_next_obs: jnp.ndarray = jnp.array([0])
+
+
+class PPORND2vTransition(NamedTuple):
+    done: jnp.ndarray
+    action: jnp.ndarray
+    ext_value: jnp.ndarray
+    int_value: jnp.ndarray
+    reward: jnp.ndarray
+    log_prob: jnp.ndarray
+    obs: jnp.ndarray
+    curiosity_reward: jnp.ndarray = jnp.array([0])
+    rnd_next_obs: jnp.ndarray = jnp.array([0])

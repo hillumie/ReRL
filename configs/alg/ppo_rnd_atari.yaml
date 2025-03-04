@@ -14,9 +14,7 @@ GAMMA: 0.999
 GAE_LAMBDA: 0.95
 
 CLIP_EPS: 0.1
-CLIP_VLOSS: True
-ENT_COEF: 0.5
-TARGET_KL: None
+ENT_COEF: 0.001
 VF_COEF: 0.5
 NORM_ADV: True
 ANNEAL_LR: False
@@ -34,7 +32,6 @@ ENV_KWARGS:
   reward_clip: True # reward into -1, 1
   repeat_action_probability: 0.25 # sticky actions
   frame_skip: 4
-  noop_max: 30
 
 # evaluation
 TEST_DURING_TRAINING: True 
@@ -42,6 +39,6 @@ TEST_ENVS: 8
 EPS_TEST: 0. # 0 for greedy test policy
 
 # evaluation
-EVAL_INTERVAL: 0.05 # in terms of total updates
+EVAL_INTERVAL: 0.1 # in terms of total updates
 EVAL_NUM_ENVS: 16
 EPS_EVAL: 0. # 0 for greedy policy
