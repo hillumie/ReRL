@@ -14,7 +14,7 @@ from functools import partial
 from typing import Any
 
 from models.ppo_mlp_continuous import ContinuousActorCritic
-from data.transition import ContinuousTransition 
+from data.transition import PPOTransition 
 from utils.common_utils import log_callback, save_state, print_dashboard, get_time, get_time_diff
 
 from envs.gymnax_continuous import make_env
@@ -133,7 +133,7 @@ class PPOContinuousAgent():
             obsv, env_state, reward, done, info = self.env.step(
                 rng_step, env_state, action, self.env_params
             )
-            transition = ContinuousTransition(
+            transition = PPOTransition(
                 done, action, value, reward, log_prob, last_obs
             )
             # runner_state = (train_state, env_state, obsv, rng)

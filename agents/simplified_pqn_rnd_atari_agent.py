@@ -119,7 +119,7 @@ def make_train(config):
             init_x = jnp.zeros((1, 1, *env.single_observation_space.shape[1:]))
             network_variables = init_network.init(rng, init_x, train=False)
 
-            tabulate_fn = nn.tabulate(network, jax.random.PRNGKey(config["SEED"]))
+            tabulate_fn = nn.tabulate(init_network, jax.random.PRNGKey(config["SEED"]))
             print(tabulate_fn(init_x, train=False))
 
             tx = optax.chain(
@@ -128,7 +128,7 @@ def make_train(config):
             )
 
             train_state = CustomTrainState.create(
-                apply_fn=network.apply,
+                apply_fn=init_network.apply,
                 params=network_variables["params"],
                 batch_stats=None,
                 tx=tx,

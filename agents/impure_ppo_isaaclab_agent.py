@@ -14,7 +14,7 @@ from functools import partial
 from typing import Any
 
 from models.ppo_mlp_isaaclab import ContinuousActorCritic
-from data.transition import ContinuousTransition 
+from data.transition import PPOTransition 
 from utils.common_utils import log_callback, save_state, print_dashboard, get_time, get_time_diff
 
 from utils.common_utils import save_path
@@ -140,7 +140,7 @@ class PPOIsaacAgent():
                 env_state, action,
             )
             done = jnp.logical_or(ter, trun)
-            transition = ContinuousTransition(
+            transition = PPOTransition(
                 done, action, value, reward, log_prob, last_obs
             )
 

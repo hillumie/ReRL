@@ -53,6 +53,12 @@ class Agent():
             elif self.config["ALG_NAME"] == "pqn_rnd_atari":
                 from agents.simplified_pqn_rnd_atari_agent import make_train
                 self.agent = jax.jit(make_train(self.config))
+            elif self.config["ALG_NAME"] == "ppo_atari":
+                from agents.ppo_atari_agent import make_train
+                self.agent = jax.jit(make_train(self.config))
+            elif self.config["ALG_NAME"] == "ppo_rnd_atari":
+                from agents.simplified_ppo_rnd_atari_agent import make_train
+                self.agent = jax.jit(make_train(self.config))
             else:
                 raise NotImplemented(f"{self.config['ALG_NAME']} is not yet implemented")
         else:

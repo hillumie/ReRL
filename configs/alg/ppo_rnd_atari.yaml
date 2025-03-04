@@ -1,0 +1,47 @@
+ALG_NAME: "ppo_rnd_atari"
+TOTAL_TIMESTEPS: 5e8 # with 4 frame skip correpsnds to 200M frames
+TOTAL_TIMESTEPS_DECAY: 5e8 # will be used for decay functions (epsilon and lr)
+NUM_ENVS: 128 # parallel environments
+NUM_STEPS: 32 # steps per environment in each update
+NUM_EPOCHS: 4 # number of epochs per update
+NUM_MINIBATCHES: 4 # minibatches per epoch
+NORM_TYPE: "layer_norm" # layer_norm or batch_norm
+ACTIVATION: "elu"
+LR: 0.0001
+MAX_GRAD_NORM: 0.5
+LR_LINEAR_DECAY: True
+GAMMA: 0.999
+GAE_LAMBDA: 0.95
+
+CLIP_EPS: 0.1
+CLIP_VLOSS: True
+ENT_COEF: 0.5
+TARGET_KL: None
+VF_COEF: 0.5
+NORM_ADV: True
+ANNEAL_LR: False
+
+INT_COEF: 1.0
+EXT_COEF: 2.0
+INT_GAMMA: 0.99
+RND_UPDATE_PROPORTION: 0.25
+RANDOM_WALK_PROPORTION: 0.0005 # 1M frames of random walk to update rms
+
+# env specific, see https://envpool.readthedocs.io/en/latest/env/atari.html
+ENV_NAME: "MontezumaRevenge-v5"
+ENV_KWARGS: 
+  episodic_life: True # lost life -> done, increases sample efficiency, may hurt in some games
+  reward_clip: True # reward into -1, 1
+  repeat_action_probability: 0.25 # sticky actions
+  frame_skip: 4
+  noop_max: 30
+
+# evaluation
+TEST_DURING_TRAINING: True 
+TEST_ENVS: 8
+EPS_TEST: 0. # 0 for greedy test policy
+
+# evaluation
+EVAL_INTERVAL: 0.05 # in terms of total updates
+EVAL_NUM_ENVS: 16
+EPS_EVAL: 0. # 0 for greedy policy

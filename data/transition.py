@@ -28,10 +28,22 @@ class RNNTransition:
     q_vals: chex.Array
 
 
-class ContinuousTransition(NamedTuple):
+class PPOTransition(NamedTuple):
     done: jnp.ndarray
     action: jnp.ndarray
     value: jnp.ndarray
     reward: jnp.ndarray
     log_prob: jnp.ndarray
     obs: jnp.ndarray
+
+
+
+class PPORNDTransition(NamedTuple):
+    done: jnp.ndarray
+    action: jnp.ndarray
+    value: jnp.ndarray
+    reward: jnp.ndarray
+    log_prob: jnp.ndarray
+    obs: jnp.ndarray
+    curiosity_reward: jnp.ndarray = jnp.array([0])
+    rnd_next_obs: jnp.ndarray = jnp.array([0])
