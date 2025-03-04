@@ -13,7 +13,7 @@ from functools import partial
 
 from typing import Any
 
-from models.pqn_rnd_cnn import QNetwork, FeatureCNN
+from models.pqn_rnd_cnn import QNetwork, FeatureRNDCNN, TargetFeatureRNDCNN
 from data.transition import Transition 
 from utils.tech_utils import *
 from utils.common_utils import log_callback, print_callback, save_state, get_time, get_time_diff
@@ -90,9 +90,9 @@ def make_train(config):
             norm_input=config.get("NORM_INPUT", False),
         )
 
-        rnd_network = FeatureCNN()
+        rnd_network = FeatureRNDCNN()
 
-        target_rnd_network = FeatureCNN()
+        target_rnd_network = TargetFeatureRNDCNN()
 
         def create_agent(rng, init_network):
             init_x = jnp.zeros((1, *env.single_observation_space.shape))
@@ -114,19 +114,40 @@ def make_train(config):
             )
 
             return train_state
+        
+        def create_rnd(rng, init_network):
+            init_x = jnp.zeros((1, 1, *env.single_observation_space.shape[1:]))
+            network_variables = init_network.init(rng, init_x, train=False)
+
+            tabulate_fn = nn.tabulate(network, jax.random.PRNGKey(config["SEED"]))
+            print(tabulate_fn(init_x, train=False))
+
+            tx = optax.chain(
+                optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
+                optax.radam(learning_rate=lr),
+            )
+
+            train_state = CustomTrainState.create(
+                apply_fn=network.apply,
+                params=network_variables["params"],
+                batch_stats=None,
+                tx=tx,
+            )
+
+            return train_state
 
         rng, _rng = jax.random.split(rng)
         train_state = create_agent(rng, network)
 
         rng, _rng = jax.random.split(rng)
-        rnd_train_state = create_agent(rng, rnd_network)
+        rnd_train_state = create_rnd(rng, rnd_network)
 
         rng, _rng = jax.random.split(rng)
-        target_rnd_train_state = create_agent(rng, target_rnd_network)
+        target_rnd_train_state = create_rnd(rng, target_rnd_network)
 
         obs_rms = RunningMeanStd(
-            mean = jnp.zeros((1, 4, 84, 84)),
-            var = jnp.ones((1, 4, 84, 84)),
+            mean = jnp.zeros((1, 1, 84, 84)),
+            var = jnp.ones((1, 1, 84, 84)),
             count = 1e-4,
         )
 
@@ -197,13 +218,13 @@ def make_train(config):
                 new_obs, new_env_state, reward, new_done, info = env.step(
                     env_state, new_action
                 )
-
-                rnd_new_obs = (((new_obs - obs_rms.mean) / jnp.sqrt(obs_rms.var)).clip(-5, 5)).astype(jnp.float32)
+                rnd_new_obs = ((
+                    (new_obs[:, -1, :, :].reshape((-1, 1,) + env.observation_space.shape[1:]) - obs_rms.mean) / jnp.sqrt(obs_rms.var)
+                                ).clip(-5, 5)).astype(jnp.float32)
 
                 target_next_feature = target_rnd_network.apply(
                     {
                         "params": target_rnd_train_state.params,
-                        "batch_stats": target_rnd_train_state.batch_stats,
                     },
                     rnd_new_obs,
                     train=False
@@ -211,7 +232,6 @@ def make_train(config):
                 predict_next_feature = rnd_network.apply(
                     {
                         "params": rnd_train_state.params,
-                        "batch_stats": rnd_train_state.batch_stats,
                     },
                     rnd_new_obs,
                     train=False
@@ -394,30 +414,26 @@ def make_train(config):
                     rnd_train_state, rng = carry
 
                     def _loss_fn(params):
-                        predicted_rnd_features, updates = rnd_network.apply(
-                            {"params": params, "batch_stats": rnd_train_state.batch_stats},
+                        predicted_rnd_features = rnd_network.apply(
+                            {"params": params},
                             minibatch.rnd_next_obs,
-                            train=True,
-                            mutable=["batch_stats"],
                         )  # (batch_size*2, num_actions)
 
                         target_rnd_features = target_rnd_network.apply(
-                            {"params": target_rnd_train_state.params, "batch_stats": target_rnd_train_state.batch_stats},
+                            {"params": target_rnd_train_state.params},
                             minibatch.rnd_next_obs,
-                            train=False,
                         )  # (batch_size*2, num_actions)
 
                         loss = 0.5 * jnp.square(predicted_rnd_features - target_rnd_features).mean()
 
-                        return loss, (updates)
+                        return loss
 
-                    (loss, (updates)), grads = jax.value_and_grad(
-                        _loss_fn, has_aux=True
+                    (loss), grads = jax.value_and_grad(
+                        _loss_fn
                     )(rnd_train_state.params)
                     rnd_train_state = rnd_train_state.apply_gradients(grads=grads)
                     rnd_train_state = rnd_train_state.replace(
                         grad_steps=rnd_train_state.grad_steps + 1,
-                        batch_stats=updates["batch_stats"],
                     )
                     return (rnd_train_state, rng), loss
 
@@ -440,7 +456,8 @@ def make_train(config):
                 )
             
 
-            obs_rms = update_rms(obs_rms, minibatches.obs.reshape((-1,) + env.observation_space.shape))
+            # Update obs running stats
+            obs_rms = update_rms(obs_rms, minibatches.obs[:, -1, :, :].reshape((-1, 1,) + env.observation_space.shape[1:]))
             
 
             rng, _rng = jax.random.split(rng)
@@ -603,7 +620,7 @@ def make_train(config):
                 # remove testing envs
                 tran_obs = tran_obs[:, : -config["TEST_ENVS"]]
 
-            obs_rms = update_rms(obs_rms, tran_obs.reshape((-1,) + env.observation_space.shape))
+            obs_rms = update_rms(obs_rms, tran_obs[:, -1, :, :].reshape((-1, 1,) + env.observation_space.shape[1:]))
 
             train_state = train_state.replace(
                 timesteps=train_state.timesteps + config["NUM_STEPS"] * config["NUM_ENVS"],
