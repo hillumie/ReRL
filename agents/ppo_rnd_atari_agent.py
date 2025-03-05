@@ -329,7 +329,7 @@ def make_train(config):
                     delta = reward + config["INT_GAMMA"] * next_value * (1 - done) - value
                     gae = (
                         delta
-                        + config["GAMMA"] * config["GAE_LAMBDA"] * (1 - done) * gae
+                        + config["INT_GAMMA"] * config["GAE_LAMBDA"] * (1 - done) * gae
                     )
                     return (gae, value), gae
 
@@ -371,10 +371,10 @@ def make_train(config):
                         log_prob = pi.log_prob(traj_batch.action)
 
                         # CALCULATE VALUE LOSS
+                        ext_value_losses = jnp.square(ext_value - ext_targets)
                         ext_value_pred_clipped = traj_batch.ext_value + (
                             ext_value - traj_batch.ext_value
                         ).clip(-config["CLIP_EPS"], config["CLIP_EPS"])
-                        ext_value_losses = jnp.square(ext_value - ext_targets)
                         ext_value_losses_clipped = jnp.square(ext_value_pred_clipped - ext_targets)
                         ext_value_loss = (
                             0.5 * jnp.maximum(ext_value_losses, ext_value_losses_clipped).mean()
