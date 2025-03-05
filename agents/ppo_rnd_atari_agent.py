@@ -20,9 +20,6 @@ from utils.common_utils import log_callback, print_callback, save_state, get_tim
 
 from envs.envpool import make_env
 
-from exploration.eps_greedy import eps_greedy_exploration
-
-
 class CustomTrainState(TrainState):
     batch_stats: Any
     timesteps: int = 0
@@ -82,7 +79,7 @@ def make_train(config):
 
         # INIT NETWORK AND OPTIMIZER
         network = ActorCritic(
-            env.single_action_space.n, activation=config["ACTIVATION"]
+            env.single_action_space.n
         )
 
         rnd_network = FeatureRNDCNN()
@@ -98,7 +95,7 @@ def make_train(config):
 
             tx = optax.chain(
                 optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
-                optax.radam(learning_rate=lr),
+                optax.adam(learning_rate=lr, eps=1e-5),
             )
 
             train_state = CustomTrainState.create(
@@ -119,7 +116,7 @@ def make_train(config):
 
             tx = optax.chain(
                 optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
-                optax.radam(learning_rate=lr),
+                optax.adam(learning_rate=lr, eps=1e-5),
             )
 
             train_state = CustomTrainState.create(
@@ -322,7 +319,7 @@ def make_train(config):
                     done, value, reward = (
                         transition.done,
                         transition.int_value,
-                        transition.reward,
+                        transition.curiosity_reward,
                     )
                     done = jnp.zeros_like(done) # Intrinsic target value does not have done flag
 
@@ -412,6 +409,10 @@ def make_train(config):
                         train_state.params, traj_batch, advantages, ext_targets, int_targets
                     )
                     train_state = train_state.apply_gradients(grads=grads)
+                    train_state = train_state.replace(
+                        grad_steps=train_state.grad_steps + 1,
+                    )
+                    
                     return train_state, total_loss
                 
 
@@ -439,12 +440,12 @@ def make_train(config):
                         predicted_rnd_features = rnd_network.apply(
                             {"params": params},
                             minibatch.rnd_next_obs,
-                        )  # (batch_size*2, num_actions)
+                        )
 
                         target_rnd_features = target_rnd_network.apply(
                             {"params": target_rnd_train_state.params},
                             minibatch.rnd_next_obs,
-                        )  # (batch_size*2, num_actions)
+                        )
 
                         loss = 0.5 * jnp.square(predicted_rnd_features - target_rnd_features).mean()
 

@@ -8,17 +8,11 @@ import distrax
 
 class ActorCritic(nn.Module):
     action_dim: Sequence[int]
-    activation: str = "tanh"
 
     @nn.compact
     def __call__(self, x):
         x = jnp.transpose(x, (0, 2, 3, 1))
         x = x / 255.0
-
-        if self.activation == "relu":
-            activation = nn.relu
-        else:
-            activation = nn.tanh
 
         x = nn.Conv(
             32,
