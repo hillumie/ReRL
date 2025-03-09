@@ -9,6 +9,7 @@ safetensors==0.4.2
 craftax==1.4.2
 blinker==1.4.0
 jaxmarl==0.0.4
+distrax
 # less sensitive libs
 wandb
 pytest

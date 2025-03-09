@@ -5,6 +5,7 @@ import jax.experimental
 import numpy as np
 import jax
 import jax.numpy as jnp
+import flax
 from flax.training.train_state import TrainState
 import flax.linen as nn
 import optax
@@ -21,10 +22,15 @@ from utils.common_utils import log_callback, print_callback, save_state, get_tim
 from envs.envpool import make_env
 
 class CustomTrainState(TrainState):
-    batch_stats: Any
     timesteps: int = 0
     n_updates: int = 0
     grad_steps: int = 0
+
+@flax.struct.dataclass
+class AgentParams:
+    network_params: flax.core.FrozenDict
+    rnd_params: flax.core.FrozenDict
+    target_rnd_params: flax.core.FrozenDict
 
 
 def make_train(config):
@@ -86,33 +92,22 @@ def make_train(config):
 
         target_rnd_network = TargetFeatureRNDCNN()
 
-        def create_agent(rng, init_network):
+        def create_agent(rng, network, rnd_network, target_rnd_network):
             init_x = jnp.zeros((1, *env.single_observation_space.shape))
-            network_variables = init_network.init(rng, init_x)
+            network_variables = network.init(rng, init_x)
 
-            tabulate_fn = nn.tabulate(network, jax.random.PRNGKey(config["SEED"]))
-            # print(tabulate_fn(init_x))
-
-            tx = optax.chain(
-                optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
-                optax.adam(learning_rate=lr, eps=1e-5),
-            )
-
-            train_state = CustomTrainState.create(
-                apply_fn=network.apply,
-                params=network_variables,
-                batch_stats=None,
-                tx=tx,
-            )
-
-            return train_state
-        
-        def create_rnd(rng, init_network):
             init_x = jnp.zeros((1, 1, *env.single_observation_space.shape[1:]))
-            network_variables = init_network.init(rng, init_x)
 
-            tabulate_fn = nn.tabulate(init_network, jax.random.PRNGKey(config["SEED"]))
-            print(tabulate_fn(init_x))
+            rng, _rng = jax.random.split(rng)
+            rnd_variables = rnd_network.init(_rng, init_x)
+
+            rng, _rng = jax.random.split(rng)
+            target_rnd_variables = target_rnd_network.init(_rng, init_x)
+
+            rnd_tabulate_fn = nn.tabulate(rnd_network, jax.random.PRNGKey(config["SEED"]))
+            target_rnd_tabulate_fn = nn.tabulate(target_rnd_network, jax.random.PRNGKey(config["SEED"]))
+            print(rnd_tabulate_fn(init_x))
+            print(target_rnd_tabulate_fn(init_x))
 
             tx = optax.chain(
                 optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
@@ -120,22 +115,19 @@ def make_train(config):
             )
 
             train_state = CustomTrainState.create(
-                apply_fn=init_network.apply,
-                params=network_variables["params"],
-                batch_stats=None,
+                apply_fn=None,
+                params=AgentParams(
+                    network_params=network_variables,
+                    rnd_params=rnd_variables,
+                    target_rnd_params=target_rnd_variables,
+                ),
                 tx=tx,
             )
 
-            return train_state
+            return train_state, rng
 
         rng, _rng = jax.random.split(rng)
-        train_state = create_agent(rng, network)
-
-        rng, _rng = jax.random.split(rng)
-        rnd_train_state = create_rnd(rng, rnd_network)
-
-        rng, _rng = jax.random.split(rng)
-        target_rnd_train_state = create_rnd(rng, target_rnd_network)
+        train_state, rng = create_agent(rng, network, rnd_network, target_rnd_network)
 
         obs_rms = RunningMeanStd(
             mean = jnp.zeros((1, 1, 84, 84)),
@@ -158,7 +150,7 @@ def make_train(config):
 
             full_train_state, expl_state, global_metrics, rng = runner_state
 
-            train_state, rnd_train_state, obs_rms, reward_rms, rewems = full_train_state
+            train_state, obs_rms, reward_rms, rewems = full_train_state
 
 
             metrics = {"general": {}, "losses": {}, "time": {}, "misc": {}}
@@ -191,7 +183,7 @@ def make_train(config):
             def _step_env(carry, _):
                 last_obs, env_state, rng = carry
                 rng, _rng = jax.random.split(rng)
-                pi, ext_value, int_value = network.apply(train_state.params, last_obs)
+                pi, ext_value, int_value = network.apply(train_state.params.network_params, last_obs)
                 new_action = pi.sample(seed=_rng)
                 log_prob = pi.log_prob(new_action)
 
@@ -200,23 +192,20 @@ def make_train(config):
                 )
                 rnd_new_obs = ((
                     (new_obs[:, -1, :, :].reshape((-1, 1,) + env.observation_space.shape[1:]) - obs_rms.mean) / jnp.sqrt(obs_rms.var)
-                                ).clip(-5, 5)).astype(jnp.float32)
-
+                                ).clip(-5, 5))
+                
                 target_next_feature = target_rnd_network.apply(
-                    {
-                        "params": target_rnd_train_state.params,
-                    },
+                    train_state.params.target_rnd_params,
                     rnd_new_obs,
                     train=False
                 )
                 predict_next_feature = rnd_network.apply(
-                    {
-                        "params": rnd_train_state.params,
-                    },
+                    train_state.params.rnd_params,
                     rnd_new_obs,
                     train=False
                 )
-                curiosity_reward = ((jnp.square(target_next_feature - predict_next_feature)).sum(axis=1) / 2)
+
+                curiosity_reward = jax.lax.stop_gradient((jnp.square(target_next_feature - predict_next_feature)).sum(axis=1) / 2)
 
                 transition = PPORND2vTransition(
                     action=new_action,
@@ -249,7 +238,11 @@ def make_train(config):
                 )
                 last_obs = last_obs[: -config["TEST_ENVS"]]
 
-            (_, rewems), curiosity_reward_per_env = jax.lax.scan(update_reward_forward_filter, (config["INT_GAMMA"], rewems), transitions.curiosity_reward)
+            (_, rewems), curiosity_reward_per_env = jax.lax.scan(
+                update_reward_forward_filter, 
+                (config["INT_GAMMA"], rewems), 
+                transitions.curiosity_reward
+            )
 
             mean, std, count = (
                 jnp.mean(curiosity_reward_per_env),
@@ -287,7 +280,7 @@ def make_train(config):
                 + config["NUM_STEPS"] * config["NUM_ENVS"]
             )  # update timesteps count
 
-            _, last_ext_val, last_int_val = network.apply(train_state.params, last_obs)
+            _, last_ext_val, last_int_val = network.apply(train_state.params.network_params, last_obs)
 
             def _calculate_ext_gae(traj_batch, last_val):
                 def _get_advantages(gae_and_next_value, transition):
@@ -363,8 +356,21 @@ def make_train(config):
                     traj_batch, advantages, ext_targets, int_targets = batch_info
 
                     def _loss_fn(params, traj_batch, gae, ext_targets, int_targets):
+                        # # CALCULATE RND LOSS
+                        num_proportion = int(traj_batch.rnd_next_obs.shape[0]*config["RND_UPDATE_PROPORTION"])
+                        predicted_rnd_features = rnd_network.apply(
+                            params.rnd_params,
+                            traj_batch.rnd_next_obs[:num_proportion],
+                        )
+                        target_rnd_features = target_rnd_network.apply(
+                            params.target_rnd_params,
+                            traj_batch.rnd_next_obs[:num_proportion],
+                        )
+
+                        rnd_loss = 0.5 * jnp.square(predicted_rnd_features - jax.lax.stop_gradient(target_rnd_features)).mean()
+
                         # RERUN NETWORK
-                        pi, ext_value, int_value = network.apply(params, traj_batch.obs)
+                        pi, ext_value, int_value = network.apply(params.network_params, traj_batch.obs)
                         log_prob = pi.log_prob(traj_batch.action)
 
                         # CALCULATE VALUE LOSS
@@ -398,11 +404,12 @@ def make_train(config):
                         entropy = pi.entropy().mean()
 
                         total_loss = (
-                            loss_actor
+                            rnd_loss
+                            + loss_actor
                             + config["VF_COEF"] * value_loss
                             - config["ENT_COEF"] * entropy
                         )
-                        return total_loss, (value_loss, loss_actor, entropy)
+                        return total_loss, (value_loss, loss_actor, entropy, rnd_loss)
 
                     grad_fn = jax.value_and_grad(_loss_fn, has_aux=True)
                     total_loss, grads = grad_fn(
@@ -424,48 +431,6 @@ def make_train(config):
                 update_state = (train_state, traj_batch, advantages, ext_targets, int_targets, rng)
 
                 return update_state, total_loss
-            
-
-
-
-            # Learn RND network 
-            def _learn_rnd_epoch(carry, _):
-                rnd_train_state, minibatches, rng = carry
-
-                def _learn_phase(carry, minibatch):
-
-                    rnd_train_state, rng = carry
-
-                    def _loss_fn(params):
-                        predicted_rnd_features = rnd_network.apply(
-                            {"params": params},
-                            minibatch.rnd_next_obs,
-                        )
-
-                        target_rnd_features = target_rnd_network.apply(
-                            {"params": target_rnd_train_state.params},
-                            minibatch.rnd_next_obs,
-                        )
-
-                        loss = 0.5 * jnp.square(predicted_rnd_features - target_rnd_features).mean()
-
-                        return loss
-
-                    (loss), grads = jax.value_and_grad(
-                        _loss_fn
-                    )(rnd_train_state.params)
-                    rnd_train_state = rnd_train_state.apply_gradients(grads=grads)
-                    rnd_train_state = rnd_train_state.replace(
-                        grad_steps=rnd_train_state.grad_steps + 1,
-                    )
-                    return (rnd_train_state, rng), loss
-
-                rng, _rng = jax.random.split(rng)
-                (rnd_train_state, rng), loss = jax.lax.scan(
-                    _learn_phase, (rnd_train_state, rng), minibatches
-                )
-
-                return (rnd_train_state, minibatches, rng), loss
 
 
 
@@ -488,26 +453,12 @@ def make_train(config):
             
 
             # Update obs running stats
-            obs_rms = update_rms(obs_rms, minibatches.obs[:, -1, :, :].reshape((-1, 1,) + env.observation_space.shape[1:]))
+            obs_rms = update_rms(obs_rms, minibatches.obs[:, :, -1, :, :].reshape((-1, 1,) + env.observation_space.shape[1:]))
             
 
             rng, _rng = jax.random.split(rng)
             (train_state, _, _, _, _, rng), loss_info = jax.lax.scan(
                 _learn_epoch, update_state, None, config["NUM_EPOCHS"]
-            )
-
-
-            # Learn RND feature function
-            # Feature predictor is only updated using a proportion of full experiences
-            rnd_minibatches = jax.tree_util.tree_map(
-                    lambda x: x[:int(x.shape[0]*config["RND_UPDATE_PROPORTION"])], minibatches
-                )  # num_actors*num_envs (batch_size), ...
-            rng, _rng = jax.random.split(rng)
-            (rnd_train_state, _, rng), rnd_loss = jax.lax.scan(
-                _learn_rnd_epoch, 
-                (rnd_train_state, rnd_minibatches, rng), 
-                None, 
-                config["NUM_EPOCHS"]
             )
 
             train_state = train_state.replace(n_updates=train_state.n_updates + 1)
@@ -531,7 +482,7 @@ def make_train(config):
                 "env_frames": train_state.timesteps * config["ENV_KWARGS"]["frame_skip"],
                 "grad_steps": train_state.grad_steps,
             })
-            total_loss, (value_loss, loss_actor, entropy) = loss_info
+            total_loss, (value_loss, loss_actor, entropy, rnd_loss) = loss_info
             metrics["losses"].update({
                 "value_loss": value_loss.mean(),
                 "actor_loss": loss_actor.mean(),
@@ -539,6 +490,11 @@ def make_train(config):
                 "total_loss": total_loss.mean(),
                 "rnd_loss": rnd_loss.mean(),
                 "reward": transitions.reward.mean(),
+                "ext_value": transitions.ext_value.mean(),
+                "int_value": transitions.int_value.mean(),
+                "advantage": advantages.mean(),
+                "int_target": int_targets.mean(),
+                "ext_target": ext_targets.mean(),
             })
 
             metrics["general"].update({k: v.mean() for k, v in infos.items()})
@@ -557,7 +513,7 @@ def make_train(config):
             global_metrics["train_time"] += metrics["time"]["train_time"]
             global_metrics["uptime"] = metrics["time"]["uptime"]
 
-            full_train_state = (train_state, rnd_train_state, obs_rms, reward_rms, rewems)
+            full_train_state = (train_state, obs_rms, reward_rms, rewems)
             
             runner_state = (full_train_state, tuple(expl_state), global_metrics, rng)
 
@@ -582,7 +538,7 @@ def make_train(config):
             def _step_env(carry):
                 last_obs, env_state, rng = carry
                 rng, _rng = jax.random.split(rng)
-                pi, _, _ = network.apply(train_state.params, last_obs)
+                pi, _, _ = network.apply(train_state.params.network_params, last_obs)
                 new_action = pi.sample(seed=_rng)
                 log_prob = pi.log_prob(new_action)
 
@@ -644,7 +600,7 @@ def make_train(config):
                 # remove testing envs
                 tran_obs = tran_obs[:, : -config["TEST_ENVS"]]
 
-            obs_rms = update_rms(obs_rms, tran_obs[:, -1, :, :].reshape((-1, 1,) + env.observation_space.shape[1:]))
+            obs_rms = update_rms(obs_rms, tran_obs[:, :, -1, :, :].reshape((-1, 1,) + env.observation_space.shape[1:]))
 
             train_state = train_state.replace(
                 timesteps=train_state.timesteps + config["NUM_STEPS"] * config["NUM_ENVS"],
@@ -702,7 +658,7 @@ def make_train(config):
 
         rng, _rng = jax.random.split(rng)
 
-        full_train_state = (train_state, rnd_train_state, obs_rms, reward_rms, rewems)
+        full_train_state = (train_state, obs_rms, reward_rms, rewems)
         runner_state = (full_train_state, expl_state, global_metrics, _rng)
 
 
