@@ -173,8 +173,7 @@ def log_callback(metrics, global_metrics, original_seed, config):
     except:
         print("ignore tensorboard since torch is not supported")
 
-    if config.get("PRINT", True):
-        print_callback(metrics, global_metrics, original_seed, config)
+    print_callback(metrics, global_metrics, original_seed, config)
         
 def print_callback(metrics, global_metrics, original_seed, config):
     all_metrics = dict()
@@ -193,9 +192,9 @@ def print_callback(metrics, global_metrics, original_seed, config):
 
     all_metrics["misc_time"] = all_metrics["uptime"] - all_metrics["env_time"] - all_metrics["train_time"] - all_metrics["eval_time"]
 
-    if config.get("DASHBOARD", False):
+    if config["PRINT"] == "dashboard":
         jax.debug.callback(print_dashboard, all_metrics, losses_, all_metrics["env_frames"], all_metrics["iterations"], other_metrics, True)
-    else:
+    elif config["PRINT"] == "simple":
         jax.debug.callback(casual_print, all_metrics)
 
 

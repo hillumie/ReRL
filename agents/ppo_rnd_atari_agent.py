@@ -481,6 +481,7 @@ def make_train(config):
                 "env_steps": train_state.timesteps,
                 "env_frames": train_state.timesteps * config["ENV_KWARGS"]["frame_skip"],
                 "grad_steps": train_state.grad_steps,
+                "learning_rate": lr_scheduler(train_state.grad_steps) if config.get("LR_LINEAR_DECAY", False) else config["LR"],
             })
             total_loss, (value_loss, loss_actor, entropy, rnd_loss) = loss_info
             metrics["losses"].update({

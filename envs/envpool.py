@@ -150,7 +150,10 @@ class JaxLogEnvPoolWrapper(gym.Wrapper):
 
         if self.reset_info:
             elapsed_steps = infos["elapsed_step"]
-            terminated = infos["terminated"] + infos["TimeLimit.truncated"]
+            terminated = infos["terminated"]
+            truncated = infos["TimeLimit.truncated"]
+            num_lives = infos["lives"]
+            real_rewards = infos["reward"]
             infos = {}
         normalize_score = lambda x: (x - self.env_random_score) / (
             self.env_human_score - self.env_random_score
@@ -161,8 +164,11 @@ class JaxLogEnvPoolWrapper(gym.Wrapper):
         )
         infos["returned_episode_lengths"] = state.returned_episode_lengths
         infos["elapsed_step"] = elapsed_steps
-        infos["returned_episode"] = terminated
+        infos["returned_episode"] = terminated + truncated
+        infos["lives"] = num_lives
+        infos["real_reward"] = real_rewards
 
+        # jax.debug.callback(print_call, state.episode_lengths[0], new_episode_return[0], terminated[0], truncated[0], num_lives[0], dones[0])
         return (
             observations,
             state,
@@ -188,3 +194,7 @@ def make_env(num_envs, env_name, seed, env_kwargs):
     env = JaxLogEnvPoolWrapper(env)
 
     return env
+
+
+def print_call(length, ret, ter, trun, lives, done):
+    print(length, ret, ter, trun, lives, done)

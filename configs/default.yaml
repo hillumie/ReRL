@@ -7,9 +7,7 @@ HYP_TUNE: False
 
 DEBUG_ALL: False  # this will calculate and log all values including those do not contribute to the learning process
 
-PRINT: True  # print and log notification
-
-DASHBOARD: True # print in a cool dashboard
+PRINT: "dashboard"  # set to "dashboard" to print in a cool dashboard, "simple" to print in simple template, None for no printing
 
 PLOT: False # Plot important metrics and save in pdf and png file (only activate if CSV_LOG=True)
 
@@ -23,7 +21,7 @@ SAVE_STATE: False  # save models, states
 SAVE_INTERVAL: 0.25
 
 # wandb params
-WANDB_MODE: "disabled"  # set to online to activate wandb, set to disabled to deactivate wandb
+WANDB_MODE: "disabled"  # set to "online" to activate wandb, set to "disabled" to deactivate wandb
 ENTITY: "test_algos"
 PROJECT: "ps_template_pqn"
 alg:
